@@ -1,0 +1,123 @@
+name: Check for CLI Updates
+
+on:
+  schedule:
+    # Runs every 6 hours: 00:00, 06:00, 12:00, 18:00 UTC
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force update even if versions match'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  check-versions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Fetch latest npm versions
+        id: versions
+        run: |
+          CLAUDE=$(curl -sf https://registry.npmjs.org/@anthropic-ai/claude-code/latest | jq -r '.version // ""')
+          GEMINI=$(curl -sf https://registry.npmjs.org/@google/gemini-cli/latest | jq -r '.version // ""')
+          CODEX=$(curl -sf https://registry.npmjs.org/@openai/codex/latest | jq -r '.version // ""')
+          NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          echo "claude_code=$CLAUDE" >> $GITHUB_OUTPUT
+          echo "gemini_cli=$GEMINI" >> $GITHUB_OUTPUT
+          echo "codex_cli=$CODEX" >> $GITHUB_OUTPUT
+          echo "updated_at=$NOW" >> $GITHUB_OUTPUT
+
+          echo "Fetched: Claude=$CLAUDE  Gemini=$GEMINI  Codex=$CODEX"
+
+      - name: Read current versions.json
+        id: current
+        run: |
+          OLD_CLAUDE=$(jq -r '.claude_code // ""' versions.json)
+          OLD_GEMINI=$(jq -r '.gemini_cli // ""' versions.json)
+          OLD_CODEX=$(jq -r '.codex_cli // ""' versions.json)
+          echo "old_claude=$OLD_CLAUDE" >> $GITHUB_OUTPUT
+          echo "old_gemini=$OLD_GEMINI" >> $GITHUB_OUTPUT
+          echo "old_codex=$OLD_CODEX" >> $GITHUB_OUTPUT
+
+      - name: Update versions.json
+        if: |
+          steps.versions.outputs.claude_code != steps.current.outputs.old_claude ||
+          steps.versions.outputs.gemini_cli != steps.current.outputs.old_gemini ||
+          steps.versions.outputs.codex_cli != steps.current.outputs.old_codex ||
+          github.event.inputs.force == 'true'
+        run: |
+          jq -n \
+            --arg claude "${{ steps.versions.outputs.claude_code }}" \
+            --arg gemini "${{ steps.versions.outputs.gemini_cli }}" \
+            --arg codex "${{ steps.versions.outputs.codex_cli }}" \
+            --arg updated "${{ steps.versions.outputs.updated_at }}" \
+            --arg note "Managed by GitHub Actions — do not edit manually" \
+            '{claude_code: $claude, gemini_cli: $gemini, codex_cli: $codex, updated_at: $updated, note: $note}' \
+            > versions.json
+
+          echo "Updated versions.json"
+          cat versions.json
+
+      - name: Check for new skills in Claude Code package
+        run: |
+          CLAUDE_VER="${{ steps.versions.outputs.claude_code }}"
+          OLD_CLAUDE="${{ steps.current.outputs.old_claude }}"
+          FORCE="${{ github.event.inputs.force }}"
+
+          if [ "$CLAUDE_VER" != "$OLD_CLAUDE" ] || [ "$FORCE" = "true" ]; then
+            echo "Claude Code updated ($OLD_CLAUDE → $CLAUDE_VER), checking for new skills..."
+
+            # Install the package and inspect for bundled skills
+            npm install --prefix /tmp/cc @anthropic-ai/claude-code@$CLAUDE_VER --quiet 2>/dev/null || true
+
+            SKILLS_DIR="/tmp/cc/node_modules/@anthropic-ai/claude-code/skills"
+            if [ -d "$SKILLS_DIR" ]; then
+              echo "Found skills directory in npm package"
+              # Copy skills that don't already exist in our repo
+              rsync -av --update "$SKILLS_DIR/" new-skills/ 2>/dev/null || true
+              echo "Skills sync complete"
+            else
+              echo "No bundled skills directory found in npm package (skills distributed externally)"
+            fi
+          else
+            echo "Claude Code unchanged ($CLAUDE_VER), skipping skill check."
+          fi
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "Claude Auto-Sync Bot"
+          git config user.email "auto-sync@users.noreply.github.com"
+          git add versions.json new-skills/
+
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            CLAUDE="${{ steps.versions.outputs.claude_code }}"
+            GEMINI="${{ steps.versions.outputs.gemini_cli }}"
+            CODEX="${{ steps.versions.outputs.codex_cli }}"
+            git commit -m "chore: update versions — claude=$CLAUDE gemini=$GEMINI codex=$CODEX"
+            git push
+            echo "Pushed updated versions.json"
+          fi
+
+      - name: Summary
+        run: |
+          echo "## Sync Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Tool | Version |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|---------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Claude Code | ${{ steps.versions.outputs.claude_code }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Gemini CLI  | ${{ steps.versions.outputs.gemini_cli }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Codex CLI   | ${{ steps.versions.outputs.codex_cli }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Checked at  | ${{ steps.versions.outputs.updated_at }} |" >> $GITHUB_STEP_SUMMARY

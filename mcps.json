@@ -1,0 +1,167 @@
+{
+  "mcpServers": {
+    "ubersuggest": {
+      "url": "https://ubersuggest-mcp.neilpatelapi.com/mcp"
+    },
+    "playwright": {
+      "command": "/Users/admin/.npm-global/bin/playwright-mcp"
+    },
+    "n8n-mcp": {
+      "command": "npx",
+      "args": [
+        "n8n-mcp"
+      ]
+    },
+    "browsermcp": {
+      "command": "npx",
+      "args": [
+        "@browsermcp/mcp@latest"
+      ]
+    },
+    "git-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@cyanheads/git-mcp-server"
+      ]
+    },
+    "21st-dev": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@21st-dev/magic@latest"
+      ]
+    },
+    "linkedin-mcp": {
+      "command": "uvx",
+      "args": [
+        "linkedin-scraper-mcp@latest"
+      ]
+    },
+    "peopledatalabs": {
+      "command": "node",
+      "args": [
+        "/tmp/pdl-mcp/build/index.js"
+      ]
+    },
+    "lemlist": {
+      "url": "https://app.lemlist.com/mcp"
+    },
+    "whatsapp": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/Users/admin/whatsapp-mcp/whatsapp-mcp-server",
+        "run",
+        "main.py"
+      ]
+    },
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp@latest"
+      ]
+    },
+    "memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ]
+    },
+    "fetch": {
+      "command": "uvx",
+      "args": [
+        "mcp-server-fetch"
+      ]
+    },
+    "hubspot": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@hubspot/mcp-server"
+      ]
+    },
+    "exa": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "exa-mcp-server"
+      ]
+    },
+    "firecrawl": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "firecrawl-mcp"
+      ]
+    },
+    "notion": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@notionhq/notion-mcp-server"
+      ]
+    },
+    "brave-search": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-brave-search"
+      ]
+    },
+    "perplexity": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "perplexity-mcp"
+      ]
+    },
+    "slack": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-slack"
+      ]
+    },
+    "stripe": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@stripe/mcp"
+      ]
+    },
+    "youtube": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "youtube-mcp"
+      ]
+    },
+    "claude-flow": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "claude-flow@3.5.0",
+        "mcp"
+      ]
+    },
+    "ruv-swarm": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "ruv-swarm@latest",
+        "mcp"
+      ]
+    },
+    "gsc": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@mikusnuz/gsc-mcp"
+      ]
+    }
+  },
+  "updated_at": "2026-05-26T16:28:54Z"
+}
