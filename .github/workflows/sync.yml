@@ -77,22 +77,64 @@ jobs:
           FORCE="${{ github.event.inputs.force }}"
 
           if [ "$CLAUDE_VER" != "$OLD_CLAUDE" ] || [ "$FORCE" = "true" ]; then
-            echo "Claude Code updated ($OLD_CLAUDE → $CLAUDE_VER), checking for new skills..."
-
-            # Install the package and inspect for bundled skills
+            echo "Claude Code updated ($OLD_CLAUDE → $CLAUDE_VER), checking for bundled skills..."
             npm install --prefix /tmp/cc @anthropic-ai/claude-code@$CLAUDE_VER --quiet 2>/dev/null || true
-
             SKILLS_DIR="/tmp/cc/node_modules/@anthropic-ai/claude-code/skills"
             if [ -d "$SKILLS_DIR" ]; then
-              echo "Found skills directory in npm package"
-              # Copy skills that don't already exist in our repo
+              echo "Found skills in Claude Code package — syncing..."
               rsync -av --update "$SKILLS_DIR/" new-skills/ 2>/dev/null || true
-              echo "Skills sync complete"
             else
-              echo "No bundled skills directory found in npm package (skills distributed externally)"
+              echo "No bundled skills in Claude Code package."
             fi
           else
-            echo "Claude Code unchanged ($CLAUDE_VER), skipping skill check."
+            echo "Claude Code unchanged ($CLAUDE_VER), skipping."
+          fi
+
+      - name: Check for new skills in Gemini CLI package
+        run: |
+          GEMINI_VER="${{ steps.versions.outputs.gemini_cli }}"
+          OLD_GEMINI="${{ steps.current.outputs.old_gemini }}"
+          FORCE="${{ github.event.inputs.force }}"
+
+          if [ "$GEMINI_VER" != "$OLD_GEMINI" ] || [ "$FORCE" = "true" ]; then
+            echo "Gemini CLI updated ($OLD_GEMINI → $GEMINI_VER), checking for bundled skills..."
+            npm install --prefix /tmp/gem @google/gemini-cli@$GEMINI_VER --quiet 2>/dev/null || true
+            # Gemini may store skills under different paths — check common locations
+            for DIR in \
+              /tmp/gem/node_modules/@google/gemini-cli/skills \
+              /tmp/gem/node_modules/@google/gemini-cli/agents \
+              /tmp/gem/node_modules/@google/gemini-cli/commands; do
+              if [ -d "$DIR" ]; then
+                echo "Found content at $DIR — syncing to new-skills/..."
+                rsync -av --update "$DIR/" new-skills/ 2>/dev/null || true
+              fi
+            done
+            echo "Gemini CLI skill check complete."
+          else
+            echo "Gemini CLI unchanged ($GEMINI_VER), skipping."
+          fi
+
+      - name: Check for new skills in Codex CLI package
+        run: |
+          CODEX_VER="${{ steps.versions.outputs.codex_cli }}"
+          OLD_CODEX="${{ steps.current.outputs.old_codex }}"
+          FORCE="${{ github.event.inputs.force }}"
+
+          if [ "$CODEX_VER" != "$OLD_CODEX" ] || [ "$FORCE" = "true" ]; then
+            echo "Codex CLI updated ($OLD_CODEX → $CODEX_VER), checking for bundled skills..."
+            npm install --prefix /tmp/cdx @openai/codex@$CODEX_VER --quiet 2>/dev/null || true
+            for DIR in \
+              /tmp/cdx/node_modules/@openai/codex/skills \
+              /tmp/cdx/node_modules/@openai/codex/agents \
+              /tmp/cdx/node_modules/@openai/codex/commands; do
+              if [ -d "$DIR" ]; then
+                echo "Found content at $DIR — syncing to new-skills/..."
+                rsync -av --update "$DIR/" new-skills/ 2>/dev/null || true
+              fi
+            done
+            echo "Codex CLI skill check complete."
+          else
+            echo "Codex CLI unchanged ($CODEX_VER), skipping."
           fi
 
       - name: Commit and push if changed
@@ -109,7 +151,7 @@ jobs:
             CODEX="${{ steps.versions.outputs.codex_cli }}"
             git commit -m "chore: update versions — claude=$CLAUDE gemini=$GEMINI codex=$CODEX"
             git push
-            echo "Pushed updated versions.json"
+            echo "Pushed updates."
           fi
 
       - name: Summary
