@@ -161,7 +161,122 @@
         "-y",
         "@mikusnuz/gsc-mcp"
       ]
+    },
+    "github": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ]
+    },
+    "cloudflare": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@cloudflare/mcp-server-cloudflare"
+      ]
+    },
+    "sentry": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@sentry/mcp-server@latest"
+      ]
+    },
+    "linear": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "linear-mcp-server"
+      ]
+    },
+    "gdrive": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-gdrive"
+      ]
+    },
+    "figma": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "figma-mcp-server"
+      ]
+    },
+    "datadog": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "datadog-mcp-server"
+      ]
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/Users/admin"
+      ]
+    },
+    "postgres": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "postgresql://username:password@localhost:5432/dbname"
+      ]
+    },
+    "redis": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-redis",
+        "redis://localhost:6379"
+      ]
+    },
+    "twilio": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "twilio-mcp"
+      ]
+    },
+    "salesforce": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "salesforce-mcp"
+      ]
+    },
+    "amplitude": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "amplitude-mcp-server"
+      ]
+    },
+    "atlassian": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-atlassian"
+      ]
+    },
+    "vercel": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "vercel-mcp"
+      ]
+    },
+    "zendesk": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "zendesk-mcp"
+      ]
     }
   },
-  "updated_at": "2026-05-26T16:28:54Z"
+  "updated_at": "2026-05-27T07:16:18Z"
 }
