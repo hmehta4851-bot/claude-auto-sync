@@ -276,7 +276,10 @@
         "-y",
         "zendesk-mcp"
       ]
+    },
+    "meta-ads": {
+      "url": "https://mcp.facebook.com/ads"
     }
   },
-  "updated_at": "2026-05-27T07:16:18Z"
+  "updated_at": "2026-05-28T06:57:42Z"
 }
