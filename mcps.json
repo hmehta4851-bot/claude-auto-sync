@@ -279,7 +279,21 @@
     },
     "meta-ads": {
       "url": "https://mcp.facebook.com/ads"
+    },
+    "canva": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@mcp_factory/canva-mcp-server"
+      ]
+    },
+    "adobe-cc": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@mcp_factory/canva-mcp-server"
+      ]
     }
   },
-  "updated_at": "2026-05-28T06:57:42Z"
+  "updated_at": "2026-06-16T07:52:53Z"
 }
