@@ -1,0 +1,185 @@
+name: July 1 Auto-Rebalance
+
+on:
+  schedule:
+    - cron: "30 18 30 6 *"  # June 30 midnight IST = 6:30 PM UTC June 30 (fires one day before to prep)
+    - cron: "0 0 1 7 *"     # July 1 00:00 UTC — main reactivation
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Action to take"
+        required: true
+        type: choice
+        options:
+          - enable-sudo-disable-bot
+          - enable-bot-disable-sudo
+          - status-check-only
+
+jobs:
+  rebalance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Rebalance quota split
+        env:
+          BOT_PAT:  ${{ secrets.BOT_PAT }}
+          SUDO_PAT: ${{ secrets.SUDO_PAT }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          ACTION_INPUT: ${{ inputs.action || 'enable-sudo-disable-bot' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python3 - << 'PYEOF'
+          import urllib.request, json, os, smtplib, datetime
+          from email.mime.text import MIMEText
+
+          BOT_PAT   = os.environ["BOT_PAT"]
+          SUDO_PAT  = os.environ["SUDO_PAT"]
+          GMAIL     = os.environ["GMAIL_USER"]
+          GMAIL_PW  = os.environ["GMAIL_APP_PASSWORD"]
+          ACTION    = os.environ.get("ACTION_INPUT", "enable-sudo-disable-bot")
+          EVENT     = os.environ.get("EVENT_NAME", "schedule")
+          TODAY     = datetime.date.today().isoformat()
+
+          # Workflow IDs (from previous session)
+          SUDO_WF_IDS = [294443577, 296678866, 296797907, 295675661,
+                         296225808, 295668728, 296067250, 295182223]
+          # Excluded: 294657256 (clear-sheet — manual only, leave disabled)
+
+          BOT_WF_IDS = [None]  # will fetch dynamically
+
+          def api_call(token, url, method="GET", data=None):
+              req = urllib.request.Request(url, data=data, method=method, headers={
+                  "Authorization": f"token {token}",
+                  "Accept": "application/vnd.github.v3+json",
+                  "Content-Type": "application/json"
+              })
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as r:
+                      return r.status, json.loads(r.read()) if r.read() else {}
+              except urllib.error.HTTPError as e:
+                  return e.code, {}
+
+          def get_workflow_ids(token, owner, repo):
+              status, data = api_call(token, f"https://api.github.com/repos/{owner}/{repo}/actions/workflows")
+              return [(w["id"], w["name"], w["state"]) for w in data.get("workflows", [])
+                      if "clear-sheet" not in w["path"] and "protected" not in w["name"].lower()]
+
+          def enable_workflows(token, owner, repo, wf_ids):
+              results = []
+              for wid in wf_ids:
+                  status, _ = api_call(token,
+                      f"https://api.github.com/repos/{owner}/{repo}/actions/workflows/{wid}/enable",
+                      method="PUT")
+                  results.append((wid, status))
+              return results
+
+          def disable_workflows(token, owner, repo, wf_ids):
+              results = []
+              for wid in wf_ids:
+                  status, _ = api_call(token,
+                      f"https://api.github.com/repos/{owner}/{repo}/actions/workflows/{wid}/disable",
+                      method="PUT")
+                  results.append((wid, status))
+              return results
+
+          log_lines = [f"=== July 1 Rebalance — {TODAY} ===", f"Action: {ACTION}", f"Trigger: {EVENT}", ""]
+          changes = []
+
+          if ACTION == "status-check-only":
+              sudo_wfs = get_workflow_ids(SUDO_PAT, "hm0163983-sudo", "lead-scraper")
+              bot_wfs  = get_workflow_ids(BOT_PAT,  "hmehta4851-bot", "lead-scraper")
+              log_lines.append("hm0163983-sudo/lead-scraper:")
+              for wid, name, state in sudo_wfs:
+                  log_lines.append(f"  {wid} {name[:40]} | {state}")
+              log_lines.append("hmehta4851-bot/lead-scraper:")
+              for wid, name, state in bot_wfs:
+                  log_lines.append(f"  {wid} {name[:40]} | {state}")
+
+          elif ACTION == "enable-sudo-disable-bot":
+              # July 1: sudo account is fresh. Enable lead-scraper there, disable on bot.
+              log_lines.append("Enabling hm0163983-sudo/lead-scraper workflows (Tue/Thu/Sat)...")
+              en_results = enable_workflows(SUDO_PAT, "hm0163983-sudo", "lead-scraper", SUDO_WF_IDS)
+              for wid, status in en_results:
+                  line = f"  ENABLED  wf {wid} → HTTP {status}"
+                  log_lines.append(line)
+                  changes.append(line)
+
+              log_lines.append("")
+              log_lines.append("Disabling hmehta4851-bot/lead-scraper workflows...")
+              bot_wfs = get_workflow_ids(BOT_PAT, "hmehta4851-bot", "lead-scraper")
+              bot_ids = [wid for wid, name, state in bot_wfs if state == "active"]
+              dis_results = disable_workflows(BOT_PAT, "hmehta4851-bot", "lead-scraper", bot_ids)
+              for wid, status in dis_results:
+                  line = f"  DISABLED wf {wid} → HTTP {status}"
+                  log_lines.append(line)
+                  changes.append(line)
+
+              log_lines.append("")
+              log_lines.append("Split active:")
+              log_lines.append("  hm0163983-sudo → lead-scraper (Tue/Thu/Sat)")
+              log_lines.append("  hmehta4851-bot → sunzone-indexing + future automations")
+
+          elif ACTION == "enable-bot-disable-sudo":
+              # Reverse: bot takes over all lead-scraper days
+              log_lines.append("Enabling hmehta4851-bot/lead-scraper workflows...")
+              bot_wfs = get_workflow_ids(BOT_PAT, "hmehta4851-bot", "lead-scraper")
+              bot_ids = [wid for wid, name, state in bot_wfs if state != "active"]
+              en_results = enable_workflows(BOT_PAT, "hmehta4851-bot", "lead-scraper", bot_ids)
+              for wid, status in en_results:
+                  line = f"  ENABLED  wf {wid} → HTTP {status}"
+                  log_lines.append(line); changes.append(line)
+
+              log_lines.append("")
+              log_lines.append("Disabling hm0163983-sudo/lead-scraper workflows...")
+              dis_results = disable_workflows(SUDO_PAT, "hm0163983-sudo", "lead-scraper", SUDO_WF_IDS)
+              for wid, status in dis_results:
+                  line = f"  DISABLED wf {wid} → HTTP {status}"
+                  log_lines.append(line); changes.append(line)
+
+          log_text = "\n".join(log_lines)
+          print(log_text)
+
+          # Send email
+          body = f"""GitHub Quota Auto-Rebalance Completed
+===========================================
+
+Date   : {TODAY}
+Action : {ACTION}
+Trigger: {EVENT}
+
+CHANGES MADE:
+{chr(10).join(changes) if changes else "  (status check only — no changes)"}
+
+CURRENT SPLIT (after this run):
+  hmehta4851-bot  →  sunzone-indexing + future automations (Mon/Wed/Fri lead scraper if active)
+  hm0163983-sudo  →  lead-scraper Tue/Thu/Sat (enabled on quota reset day)
+
+Both accounts now have balanced quota usage.
+Each account target: ~600-800 min/month (30-40% of 2,000 limit)
+Combined free budget: 4,000 min/month across both accounts
+
+Full log:
+{log_text}
+
+This email was sent automatically by:
+hmehta4851-bot/claude-auto-sync → july1-rebalance.yml
+(PUBLIC repo — uses ZERO GitHub Actions quota minutes)
+"""
+          msg = MIMEText(body, "plain")
+          msg["Subject"] = f"[Auto-Rebalance] GitHub quota split updated — {TODAY}"
+          msg["From"]    = f"Quota Intelligence <{GMAIL}>"
+          msg["To"]      = GMAIL
+
+          for attempt in range(1, 4):
+              try:
+                  with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as s:
+                      s.login(GMAIL, GMAIL_PW)
+                      s.sendmail(GMAIL, [GMAIL], msg.as_string())
+                  print(f"Notification email sent.")
+                  break
+              except Exception as e:
+                  print(f"Email attempt {attempt} failed: {e}")
+                  import time; time.sleep(10)
+          PYEOF
