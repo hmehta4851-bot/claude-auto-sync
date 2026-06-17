@@ -55,6 +55,9 @@ def disable_workflows(token, owner, repo, wf_ids):
         results.append((wid, status))
     return results
 
+def failed_workflow_actions(results):
+    return [(wid, status) for wid, status in results if status not in (200, 204)]
+
 def all_workflow_ids(token, owner, repo):
     return [wid for wid, _name, _state in get_workflow_ids(token, owner, repo)]
 
@@ -71,6 +74,7 @@ log_lines = [
     "",
 ]
 changes = []
+blocked_failures = []
 
 if ACTION == "status-check-only":
     sudo_wfs = get_workflow_ids(SUDO_PAT, "hm0163983-sudo", "lead-scraper")
@@ -85,14 +89,18 @@ if ACTION == "status-check-only":
 elif ACTION == "enable-split":
     log_lines.append("Enabling real two-account split ...")
     log_lines.append("hm0163983-sudo/lead-scraper uses Tue/Thu/Sat cron from its workflow files.")
-    for wid, status in enable_workflows(SUDO_PAT, "hm0163983-sudo", "lead-scraper", SUDO_WF_IDS):
+    sudo_results = enable_workflows(SUDO_PAT, "hm0163983-sudo", "lead-scraper", SUDO_WF_IDS)
+    blocked_failures.extend(failed_workflow_actions(sudo_results))
+    for wid, status in sudo_results:
         line = f"  SUDO ENABLED  wf {wid}  HTTP {status}"
         log_lines.append(line); changes.append(line)
 
     log_lines.append("")
     log_lines.append("hmehta4851-bot/lead-scraper uses Mon/Wed/Fri cron from its workflow files.")
     bot_ids = all_workflow_ids(BOT_PAT, "hmehta4851-bot", "lead-scraper")
-    for wid, status in enable_workflows(BOT_PAT, "hmehta4851-bot", "lead-scraper", bot_ids):
+    bot_results = enable_workflows(BOT_PAT, "hmehta4851-bot", "lead-scraper", bot_ids)
+    blocked_failures.extend(failed_workflow_actions(bot_results))
+    for wid, status in bot_results:
         line = f"  BOT ENABLED   wf {wid}  HTTP {status}"
         log_lines.append(line); changes.append(line)
 
@@ -106,14 +114,18 @@ elif ACTION == "enable-split":
 
 elif ACTION == "enable-sudo-disable-bot":
     log_lines.append("Enabling hm0163983-sudo/lead-scraper (Tue/Thu/Sat) ...")
-    for wid, status in enable_workflows(SUDO_PAT, "hm0163983-sudo", "lead-scraper", SUDO_WF_IDS):
+    sudo_results = enable_workflows(SUDO_PAT, "hm0163983-sudo", "lead-scraper", SUDO_WF_IDS)
+    blocked_failures.extend(failed_workflow_actions(sudo_results))
+    for wid, status in sudo_results:
         line = f"  ENABLED  wf {wid}  HTTP {status}"
         log_lines.append(line); changes.append(line)
 
     log_lines.append("")
     log_lines.append("Disabling hmehta4851-bot/lead-scraper ...")
     bot_ids  = active_workflow_ids(BOT_PAT, "hmehta4851-bot", "lead-scraper")
-    for wid, status in disable_workflows(BOT_PAT, "hmehta4851-bot", "lead-scraper", bot_ids):
+    bot_results = disable_workflows(BOT_PAT, "hmehta4851-bot", "lead-scraper", bot_ids)
+    blocked_failures.extend(failed_workflow_actions(bot_results))
+    for wid, status in bot_results:
         line = f"  DISABLED wf {wid}  HTTP {status}"
         log_lines.append(line); changes.append(line)
 
@@ -127,14 +139,25 @@ elif ACTION == "enable-sudo-disable-bot":
 elif ACTION == "enable-bot-disable-sudo":
     log_lines.append("Enabling hmehta4851-bot/lead-scraper ...")
     bot_ids = inactive_workflow_ids(BOT_PAT, "hmehta4851-bot", "lead-scraper")
-    for wid, status in enable_workflows(BOT_PAT, "hmehta4851-bot", "lead-scraper", bot_ids):
+    bot_results = enable_workflows(BOT_PAT, "hmehta4851-bot", "lead-scraper", bot_ids)
+    blocked_failures.extend(failed_workflow_actions(bot_results))
+    for wid, status in bot_results:
         line = f"  ENABLED  wf {wid}  HTTP {status}"
         log_lines.append(line); changes.append(line)
 
     log_lines.append("Disabling hm0163983-sudo/lead-scraper ...")
-    for wid, status in disable_workflows(SUDO_PAT, "hm0163983-sudo", "lead-scraper", SUDO_WF_IDS):
+    sudo_results = disable_workflows(SUDO_PAT, "hm0163983-sudo", "lead-scraper", SUDO_WF_IDS)
+    blocked_failures.extend(failed_workflow_actions(sudo_results))
+    for wid, status in sudo_results:
         line = f"  DISABLED wf {wid}  HTTP {status}"
         log_lines.append(line); changes.append(line)
+
+if blocked_failures:
+    log_lines += [
+        "",
+        f"ATTENTION: GitHub refused these workflow actions: {blocked_failures}",
+        "Refresh the affected account PAT secret with repo + workflow permissions before trusting automatic rebalancing.",
+    ]
 
 log_text = "\n".join(log_lines)
 print(log_text)
@@ -169,6 +192,8 @@ body_lines += [
 
 body    = "\n".join(body_lines)
 subject = f"[Auto-Rebalance] GitHub quota split updated — {TODAY}"
+if blocked_failures:
+    subject = f"[Auto-Rebalance BLOCKED] GitHub quota split needs access fix — {TODAY}"
 
 msg = MIMEText(body, "plain")
 msg["Subject"] = subject
@@ -185,3 +210,6 @@ for attempt in range(1, 4):
     except Exception as e:
         print(f"Email attempt {attempt} failed: {e}")
         import time; time.sleep(10)
+
+if blocked_failures:
+    raise SystemExit("Auto-rebalance blocked by refused GitHub workflow actions.")
