@@ -2,239 +2,31 @@ name: Quota Intelligence Monitor
 
 on:
   schedule:
-    - cron: "0 18 * * *"   # midnight IST (6:00 PM UTC) daily — PUBLIC REPO = 0 QUOTA COST
-  workflow_dispatch:        # manual trigger anytime
+    - cron: "0 18 * * *"
+  workflow_dispatch:
 
 permissions:
-  contents: write           # to commit quota-state.json
+  contents: write
 
 jobs:
   monitor:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-
     steps:
       - uses: actions/checkout@v4
 
       - name: Run quota monitor
-        id: check
         env:
-          BOT_PAT:           ${{ secrets.BOT_PAT }}
-          SUDO_PAT:          ${{ secrets.SUDO_PAT }}
-          GMAIL_USER:        ${{ secrets.GMAIL_USER }}
+          BOT_PAT: ${{ secrets.BOT_PAT }}
+          SUDO_PAT: ${{ secrets.SUDO_PAT }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-        run: |
-          python3 - << 'PYEOF'
-          import urllib.request, json, os, smtplib, datetime, base64
-          from email.mime.text import MIMEText
-          from email.mime.multipart import MIMEMultipart
-
-          BOT_PAT  = os.environ["BOT_PAT"]
-          SUDO_PAT = os.environ["SUDO_PAT"]
-          GMAIL    = os.environ["GMAIL_USER"]
-          GMAIL_PW = os.environ["GMAIL_APP_PASSWORD"]
-          QUOTA    = 2000  # free tier limit per account
-
-          def api_get(token, url):
-              req = urllib.request.Request(url, headers={
-                  "Authorization": f"token {token}",
-                  "Accept": "application/vnd.github.v3+json"
-              })
-              try:
-                  with urllib.request.urlopen(req, timeout=30) as r:
-                      return json.loads(r.read())
-              except Exception as e:
-                  print(f"API error {url}: {e}")
-                  return {}
-
-          def calc_minutes_this_month(token, owner, repos):
-              now   = datetime.datetime.now(datetime.timezone.utc)
-              month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-              since = month_start.strftime("%Y-%m-%dT%H:%M:%SZ")
-              total = 0.0
-              run_count = 0
-              for repo in repos:
-                  page = 1
-                  while True:
-                      data = api_get(token,
-                          f"https://api.github.com/repos/{owner}/{repo}/actions/runs"
-                          f"?per_page=100&page={page}&created=>={since}")
-                      runs = data.get("workflow_runs", [])
-                      if not runs:
-                          break
-                      for r in runs:
-                          try:
-                              s = datetime.datetime.fromisoformat(r["created_at"].replace("Z","+00:00"))
-                              e = datetime.datetime.fromisoformat(r["updated_at"].replace("Z","+00:00"))
-                              mins = (e - s).total_seconds() / 60
-                              if mins > 0:
-                                  total += mins
-                                  run_count += 1
-                          except:
-                              pass
-                      if len(runs) < 100:
-                          break
-                      page += 1
-              return round(total, 1), run_count
-
-          # --- Collect data ---
-          now    = datetime.datetime.now(datetime.timezone.utc)
-          today  = now.strftime("%Y-%m-%d")
-          month  = now.strftime("%B %Y")
-          day_of_month = now.day
-          weekday = now.isoweekday()  # 1=Mon, 7=Sun
-
-          print("Checking hm0163983-sudo...")
-          sudo_mins, sudo_runs = calc_minutes_this_month(
-              SUDO_PAT, "hm0163983-sudo",
-              ["lead-scraper", "sunzone-indexing"]
-          )
-
-          print("Checking hmehta4851-bot...")
-          bot_mins, bot_runs = calc_minutes_this_month(
-              BOT_PAT, "hmehta4851-bot",
-              ["lead-scraper", "sunzone-indexing", "claude-auto-sync"]
-          )
-
-          sudo_pct = round(sudo_mins / QUOTA * 100, 1)
-          bot_pct  = round(bot_mins  / QUOTA * 100, 1)
-          sudo_rem = round(QUOTA - sudo_mins, 1)
-          bot_rem  = round(QUOTA - bot_mins,  1)
-
-          # Forecast to end of month
-          days_in_month = 30 if now.month in [4,6,9,11] else (28 if now.month==2 else 31)
-          days_left = days_in_month - day_of_month
-
-          sudo_daily_rate = sudo_mins / day_of_month if day_of_month > 0 else 0
-          bot_daily_rate  = bot_mins  / day_of_month if day_of_month > 0 else 0
-          sudo_forecast = round(sudo_mins + sudo_daily_rate * days_left, 0)
-          bot_forecast  = round(bot_mins  + bot_daily_rate  * days_left, 0)
-
-          # --- Determine alert level ---
-          alert_sudo = ""
-          alert_bot  = ""
-          if sudo_pct >= 90:
-              alert_sudo = "🚨 URGENT"
-          elif sudo_pct >= 70:
-              alert_sudo = "⚠️ WARNING"
-          else:
-              alert_sudo = "✅ HEALTHY"
-
-          if bot_pct >= 90:
-              alert_bot = "🚨 URGENT"
-          elif bot_pct >= 70:
-              alert_bot = "⚠️ WARNING"
-          else:
-              alert_bot = "✅ HEALTHY"
-
-          # Save state file
-          state = {
-              "updated": today,
-              "month": month,
-              "hm0163983-sudo": {
-                  "minutes_used": sudo_mins, "runs": sudo_runs,
-                  "pct": sudo_pct, "remaining": sudo_rem,
-                  "forecast_eom": sudo_forecast, "status": alert_sudo
-              },
-              "hmehta4851-bot": {
-                  "minutes_used": bot_mins, "runs": bot_runs,
-                  "pct": bot_pct, "remaining": bot_rem,
-                  "forecast_eom": bot_forecast, "status": alert_bot
-              },
-              "split": "bot=Mon/Wed/Fri  sudo=Tue/Thu/Sat",
-              "note": "sudo lead-scraper re-enables July 1 2026"
-          }
-
-          with open("quota-state.json", "w") as f:
-              json.dump(state, f, indent=2)
-          print(f"State saved: sudo={sudo_pct}% bot={bot_pct}%")
-
-          # --- Decide whether to send email ---
-          is_monday = (weekday == 1)
-          is_urgent = (sudo_pct >= 70 or bot_pct >= 70)
-          should_email = is_monday or is_urgent
-
-          if not should_email:
-              print("No email today (not Monday and no alerts)")
-              exit(0)
-
-          # --- Build email ---
-          def bar(pct, width=20):
-              filled = int(pct / 100 * width)
-              return "█" * filled + "░" * (width - filled)
-
-          email_type = "🚨 URGENT ALERT" if is_urgent else "📊 Weekly Report"
-
-          body = f"""
-Sunzone.in GitHub Quota Intelligence Report
-{email_type} — {today}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ACCOUNT QUOTA STATUS — {month}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-{alert_sudo}  hm0163983-sudo
-  Used    : {sudo_mins:.0f} / {QUOTA} min  ({sudo_pct}%)
-  [{bar(sudo_pct)}]
-  Remaining: {sudo_rem:.0f} min
-  Forecast : {sudo_forecast:.0f} min by end of {month}
-  Runs     : {sudo_runs} workflow runs this month
-  Schedule : Lead scraper runs Tue / Thu / Sat (from July 1)
-
-{alert_bot}  hmehta4851-bot
-  Used    : {bot_mins:.0f} / {QUOTA} min  ({bot_pct}%)
-  [{bar(bot_pct)}]
-  Remaining: {bot_rem:.0f} min
-  Forecast : {bot_forecast:.0f} min by end of {month}
-  Runs     : {bot_runs} workflow runs this month
-  Schedule : Lead scraper runs Mon / Wed / Fri
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SMART SPLIT STATUS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-  hmehta4851-bot  →  Mon / Wed / Fri  (lead scraper active)
-  hm0163983-sudo  →  Tue / Thu / Sat  (re-enables July 1)
-
-  Combined usage  : {sudo_mins + bot_mins:.0f} / 4,000 min total ({(sudo_mins+bot_mins)/4000*100:.1f}% of combined quota)
-  Space for new automations : ~{(4000 - sudo_mins - bot_mins):.0f} min remaining across both accounts
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-QUOTA RESETS:  Both accounts reset on the 1st of each month
-MONITOR URL:   https://github.com/hmehta4851-bot/claude-auto-sync/blob/main/quota-state.json
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-{f"⚠️  ACTION REQUIRED: One or both accounts above 70% quota.{chr(10)}  Consider pausing non-critical workflows or checking for runaway jobs." if is_urgent else "No action needed. All systems healthy."}
-
-This report runs daily and emails you every Monday + whenever quota exceeds 70%.
-Sent by: hmehta4851-bot/claude-auto-sync  (public repo — uses ZERO quota minutes)
-"""
-
-          subject = f"[{email_type}] GitHub Quota Report — sudo:{sudo_pct}%  bot:{bot_pct}%  ({today})"
-
-          msg = MIMEMultipart("alternative")
-          msg["Subject"] = subject
-          msg["From"]    = f"Quota Intelligence <{GMAIL}>"
-          msg["To"]      = GMAIL
-          msg.attach(MIMEText(body, "plain"))
-
-          for attempt in range(1, 4):
-              try:
-                  with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as s:
-                      s.login(GMAIL, GMAIL_PW)
-                      s.sendmail(GMAIL, [GMAIL], msg.as_string())
-                  print(f"Email sent: {subject}")
-                  break
-              except Exception as e:
-                  print(f"Email attempt {attempt}/3 failed: {e}")
-                  if attempt < 3:
-                      import time; time.sleep(10)
-          PYEOF
+        run: python3 quota_monitor.py
 
       - name: Commit quota state
         run: |
           git config user.name "quota-intelligence[bot]"
           git config user.email "quota-intelligence[bot]@users.noreply.github.com"
           git add quota-state.json || true
-          git diff --staged --quiet || git commit -m "chore: update quota state [$(date +%Y-%m-%d)] [skip ci]"
+          git diff --staged --quiet || git commit -m "chore: quota state $(date +%Y-%m-%d) [skip ci]"
           git push || true
