@@ -1,0 +1,24 @@
+{
+  "updated": "2026-06-17",
+  "month": "June 2026",
+  "hm0163983-sudo": {
+    "minutes_used": 2149.9,
+    "runs": 113,
+    "pct": 107.5,
+    "remaining": -149.9,
+    "forecast_eom": 3794.0,
+    "status": "URGENT"
+  },
+  "hmehta4851-bot": {
+    "minutes_used": 2.9,
+    "runs": 7,
+    "pct": 0.1,
+    "remaining": 1997.1,
+    "forecast_eom": 5.0,
+    "status": "HEALTHY"
+  },
+  "split": "bot=Mon/Wed/Fri  sudo=Tue/Thu/Sat (from July 1)",
+  "total_available_minutes": 4000,
+  "total_used": 2152.8,
+  "combined_pct": 53.8
+}
