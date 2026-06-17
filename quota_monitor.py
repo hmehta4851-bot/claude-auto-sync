@@ -74,6 +74,9 @@ def disable_workflows(token, owner, repo, wf_ids):
         results.append((wid, status))
     return results
 
+def failed_workflow_actions(results):
+    return [(wid, status) for wid, status in results if status not in (200, 204)]
+
 def calc_minutes_this_month(token, owner, repos):
     now = datetime.datetime.now(datetime.timezone.utc)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -155,6 +158,7 @@ state = {
     "combined_pct": round((sudo_mins + bot_mins) / 4000 * 100, 1),
     "automation_action": "none",
     "automation_details": [],
+    "automation_blocked": False,
 }
 
 def set_action(action, details):
@@ -172,6 +176,10 @@ if sudo_pct >= WARNING_PCT and bot_pct < SAFE_PCT:
     bot_results = enable_workflows(BOT_PAT, "hmehta4851-bot", "lead-scraper", bot_ids)
     details.append(f"disabled sudo workflows: {sudo_results}")
     details.append(f"enabled bot workflows: {bot_results}")
+    failures = failed_workflow_actions(sudo_results) + failed_workflow_actions(bot_results)
+    if failures:
+        state["automation_blocked"] = True
+        details.append(f"ATTENTION: GitHub refused these workflow actions: {failures}")
     set_action("pause-sudo-enable-bot", details)
 elif bot_pct >= WARNING_PCT and sudo_pct < SAFE_PCT:
     details = [f"bot at {bot_pct}% and sudo at {sudo_pct}%; moving lead-scraper load to sudo."]
@@ -181,6 +189,10 @@ elif bot_pct >= WARNING_PCT and sudo_pct < SAFE_PCT:
     sudo_results = enable_workflows(SUDO_PAT, "hm0163983-sudo", "lead-scraper", SUDO_WF_IDS)
     details.append(f"disabled bot workflows: {bot_results}")
     details.append(f"enabled sudo workflows: {sudo_results}")
+    failures = failed_workflow_actions(bot_results) + failed_workflow_actions(sudo_results)
+    if failures:
+        state["automation_blocked"] = True
+        details.append(f"ATTENTION: GitHub refused these workflow actions: {failures}")
     set_action("pause-bot-enable-sudo", details)
 elif sudo_pct >= WARNING_PCT and bot_pct >= WARNING_PCT:
     set_action("alert-only-both-high", [
@@ -191,9 +203,10 @@ with open("quota-state.json", "w") as f:
     json.dump(state, f, indent=2)
 print(f"State: sudo={sudo_pct}%  bot={bot_pct}%  combined={state['combined_pct']}%")
 print(f"Automation action: {state['automation_action']}")
+print(f"Automation blocked: {state['automation_blocked']}")
 
 is_monday = (weekday == 1)
-is_urgent = (sudo_pct >= WARNING_PCT or bot_pct >= WARNING_PCT or state["automation_action"] != "none")
+is_urgent = (sudo_pct >= WARNING_PCT or bot_pct >= WARNING_PCT or state["automation_action"] != "none" or state["automation_blocked"])
 if not (is_monday or is_urgent):
     print("No email today (not Monday and no alerts). Done.")
     raise SystemExit(0)
@@ -202,7 +215,7 @@ def bar(pct, width=25):
     filled = int(pct / 100 * width)
     return "[" + "#" * filled + "-" * (width - filled) + "]"
 
-report_type = "URGENT ALERT" if is_urgent else "Weekly Report"
+report_type = "BLOCKED - NEEDS ACCESS FIX" if state["automation_blocked"] else ("URGENT ALERT" if is_urgent else "Weekly Report")
 
 lines = [
     f"GitHub Quota Intelligence Report — {report_type}",
@@ -240,6 +253,7 @@ lines = [
     "         sunzone-indexing is separate and must not be assumed migrated",
     "",
     f"  Automation action today: {state['automation_action']}",
+    f"  Automation blocked     : {state['automation_blocked']}",
     *[f"    - {line}" for line in state["automation_details"]],
     "",
     "=" * 60,
@@ -249,7 +263,8 @@ if is_urgent:
     lines += [
         "ACTION REQUIRED:",
         f"  One or both accounts above 70% quota.",
-        "  Automatic failover has been attempted when safe, but check for runaway workflows or unexpected long runs.",
+        "  Automatic failover has been attempted when safe.",
+        "  If 'Automation blocked' is True, refresh the repository secret for the account named in the failed action.",
         "  Monitor: https://github.com/hmehta4851-bot/claude-auto-sync/blob/main/quota-state.json",
         "",
     ]
@@ -283,3 +298,6 @@ for attempt in range(1, 4):
         print(f"Email attempt {attempt}/3 failed: {e}")
         if attempt < 3:
             import time; time.sleep(10)
+
+if state["automation_blocked"]:
+    raise SystemExit("Quota controller needs a valid workflow-capable token for the blocked account.")
