@@ -8,11 +8,12 @@ on:
       action:
         description: "Action"
         required: true
-        default: enable-sudo-disable-bot
+        default: enable-split
         type: choice
         options:
-          - enable-sudo-disable-bot
+          - enable-split
           - enable-bot-disable-sudo
+          - enable-sudo-disable-bot
           - status-check-only
 
 jobs:
@@ -28,6 +29,6 @@ jobs:
           SUDO_PAT: ${{ secrets.SUDO_PAT }}
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          ACTION_INPUT: ${{ inputs.action || 'enable-sudo-disable-bot' }}
+          ACTION_INPUT: ${{ inputs.action || 'enable-split' }}
           EVENT_NAME: ${{ github.event_name }}
         run: python3 rebalance.py

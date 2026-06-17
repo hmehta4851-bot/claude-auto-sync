@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""July 1 Auto-Rebalance — switches lead-scraper between accounts."""
+"""Quota rebalance controller.
+
+Keeps the lead-scraper split across both GitHub accounts after reset, and
+supports emergency failover when one account is close to quota exhaustion.
+"""
 
 import urllib.request, json, os, smtplib, datetime
 from email.mime.text import MIMEText
@@ -8,7 +12,7 @@ BOT_PAT   = os.environ["BOT_PAT"]
 SUDO_PAT  = os.environ["SUDO_PAT"]
 GMAIL     = os.environ["GMAIL_USER"]
 GMAIL_PW  = os.environ["GMAIL_APP_PASSWORD"]
-ACTION    = os.environ.get("ACTION_INPUT", "enable-sudo-disable-bot")
+ACTION    = os.environ.get("ACTION_INPUT", "enable-split")
 EVENT     = os.environ.get("EVENT_NAME", "schedule")
 TODAY     = datetime.date.today().isoformat()
 
@@ -51,6 +55,15 @@ def disable_workflows(token, owner, repo, wf_ids):
         results.append((wid, status))
     return results
 
+def all_workflow_ids(token, owner, repo):
+    return [wid for wid, _name, _state in get_workflow_ids(token, owner, repo)]
+
+def active_workflow_ids(token, owner, repo):
+    return [wid for wid, _name, state in get_workflow_ids(token, owner, repo) if state == "active"]
+
+def inactive_workflow_ids(token, owner, repo):
+    return [wid for wid, _name, state in get_workflow_ids(token, owner, repo) if state != "active"]
+
 log_lines = [
     f"=== Quota Rebalance — {TODAY} ===",
     f"Action: {ACTION}",
@@ -69,6 +82,28 @@ if ACTION == "status-check-only":
     for wid, name, state in bot_wfs:
         log_lines.append(f"  {wid}  {name[:40]}  [{state}]")
 
+elif ACTION == "enable-split":
+    log_lines.append("Enabling real two-account split ...")
+    log_lines.append("hm0163983-sudo/lead-scraper uses Tue/Thu/Sat cron from its workflow files.")
+    for wid, status in enable_workflows(SUDO_PAT, "hm0163983-sudo", "lead-scraper", SUDO_WF_IDS):
+        line = f"  SUDO ENABLED  wf {wid}  HTTP {status}"
+        log_lines.append(line); changes.append(line)
+
+    log_lines.append("")
+    log_lines.append("hmehta4851-bot/lead-scraper uses Mon/Wed/Fri cron from its workflow files.")
+    bot_ids = all_workflow_ids(BOT_PAT, "hmehta4851-bot", "lead-scraper")
+    for wid, status in enable_workflows(BOT_PAT, "hmehta4851-bot", "lead-scraper", bot_ids):
+        line = f"  BOT ENABLED   wf {wid}  HTTP {status}"
+        log_lines.append(line); changes.append(line)
+
+    log_lines += [
+        "",
+        "New split:",
+        "  hmehta4851-bot  ->  lead-scraper Mon/Wed/Fri",
+        "  hm0163983-sudo  ->  lead-scraper Tue/Thu/Sat",
+        "  quota monitor   ->  remains on public bot repo at zero private-minute cost",
+    ]
+
 elif ACTION == "enable-sudo-disable-bot":
     log_lines.append("Enabling hm0163983-sudo/lead-scraper (Tue/Thu/Sat) ...")
     for wid, status in enable_workflows(SUDO_PAT, "hm0163983-sudo", "lead-scraper", SUDO_WF_IDS):
@@ -77,8 +112,7 @@ elif ACTION == "enable-sudo-disable-bot":
 
     log_lines.append("")
     log_lines.append("Disabling hmehta4851-bot/lead-scraper ...")
-    bot_wfs  = get_workflow_ids(BOT_PAT, "hmehta4851-bot", "lead-scraper")
-    bot_ids  = [wid for wid, name, state in bot_wfs if state == "active"]
+    bot_ids  = active_workflow_ids(BOT_PAT, "hmehta4851-bot", "lead-scraper")
     for wid, status in disable_workflows(BOT_PAT, "hmehta4851-bot", "lead-scraper", bot_ids):
         line = f"  DISABLED wf {wid}  HTTP {status}"
         log_lines.append(line); changes.append(line)
@@ -92,8 +126,7 @@ elif ACTION == "enable-sudo-disable-bot":
 
 elif ACTION == "enable-bot-disable-sudo":
     log_lines.append("Enabling hmehta4851-bot/lead-scraper ...")
-    bot_wfs = get_workflow_ids(BOT_PAT, "hmehta4851-bot", "lead-scraper")
-    bot_ids = [wid for wid, name, state in bot_wfs if state != "active"]
+    bot_ids = inactive_workflow_ids(BOT_PAT, "hmehta4851-bot", "lead-scraper")
     for wid, status in enable_workflows(BOT_PAT, "hmehta4851-bot", "lead-scraper", bot_ids):
         line = f"  ENABLED  wf {wid}  HTTP {status}"
         log_lines.append(line); changes.append(line)
@@ -120,9 +153,10 @@ body_lines += (changes if changes else ["  (status check only - no changes)"])
 body_lines += [
     "",
     "CURRENT SPLIT (after this run):",
-    "  hmehta4851-bot  ->  sunzone-indexing + future automations",
-    "                      lead-scraper Mon/Wed/Fri (if active)",
-    "  hm0163983-sudo  ->  lead-scraper Tue/Thu/Sat (enabled at quota reset)",
+    "  hmehta4851-bot  ->  lead-scraper Mon/Wed/Fri when split is active",
+    "  hm0163983-sudo  ->  lead-scraper Tue/Thu/Sat when split is active",
+    "  quota monitor   ->  public bot repo, no private Actions-minute cost",
+    "  sunzone-indexing->  separate migration required; not assumed migrated",
     "",
     "Each account target: 600-800 min/month (30-40% of 2000 limit)",
     "Combined free pool : 4000 min/month",
