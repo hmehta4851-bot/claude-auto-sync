@@ -1,30 +1,27 @@
 {
-  "updated": "2026-06-17",
+  "updated": "2026-06-18",
   "month": "June 2026",
   "hm0163983-sudo": {
-    "minutes_used": 2149.9,
-    "runs": 113,
-    "pct": 107.5,
-    "remaining": -149.9,
-    "forecast_eom": 3794.0,
-    "status": "URGENT"
+    "minutes_used": 0.0,
+    "runs": 0,
+    "pct": 0.0,
+    "remaining": 2000.0,
+    "forecast_eom": 0.0,
+    "status": "HEALTHY"
   },
   "hmehta4851-bot": {
-    "minutes_used": 3.5,
-    "runs": 10,
-    "pct": 0.2,
-    "remaining": 1996.5,
-    "forecast_eom": 6.0,
+    "minutes_used": 9.2,
+    "runs": 25,
+    "pct": 0.5,
+    "remaining": 1990.8,
+    "forecast_eom": 15.0,
     "status": "HEALTHY"
   },
   "split": "bot=Mon/Wed/Fri; sudo=Tue/Thu/Sat after reset; emergency failover active",
   "total_available_minutes": 4000,
-  "total_used": 2153.4,
-  "combined_pct": 53.8,
-  "automation_action": "pause-sudo-enable-bot",
-  "automation_details": [
-    "sudo at 107.5% and bot at 0.2%; moving lead-scraper load to bot.",
-    "disabled sudo workflows: [(294443577, 0), (296678866, 0), (296797907, 0), (295675661, 0), (296225808, 0), (295668728, 0), (296067250, 0), (295182223, 0)]",
-    "enabled bot workflows: [(297064214, 204), (297064216, 204), (297064217, 204), (297064218, 204), (297064220, 204), (297064221, 204), (297064223, 204), (297064224, 204)]"
-  ]
+  "total_used": 9.2,
+  "combined_pct": 0.2,
+  "automation_action": "none",
+  "automation_details": [],
+  "automation_blocked": false
 }
