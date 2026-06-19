@@ -10,17 +10,17 @@
     "status": "HEALTHY"
   },
   "hmehta4851-bot": {
-    "minutes_used": 14.1,
-    "runs": 38,
-    "pct": 0.7,
-    "remaining": 1985.9,
-    "forecast_eom": 22.0,
+    "minutes_used": 20.2,
+    "runs": 61,
+    "pct": 1.0,
+    "remaining": 1979.8,
+    "forecast_eom": 32.0,
     "status": "HEALTHY"
   },
   "split": "bot=Mon/Wed/Fri; sudo=Tue/Thu/Sat after reset; emergency failover active",
   "total_available_minutes": 4000,
-  "total_used": 14.1,
-  "combined_pct": 0.4,
+  "total_used": 20.2,
+  "combined_pct": 0.5,
   "automation_action": "none",
   "automation_details": [],
   "automation_blocked": false
