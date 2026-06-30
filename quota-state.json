@@ -1,5 +1,5 @@
 {
-  "updated": "2026-06-29",
+  "updated": "2026-06-30",
   "month": "June 2026",
   "hm0163983-sudo": {
     "minutes_used": 0.0,
@@ -10,17 +10,17 @@
     "status": "HEALTHY"
   },
   "hmehta4851-bot": {
-    "minutes_used": 66.5,
-    "runs": 219,
-    "pct": 3.3,
-    "remaining": 1933.5,
-    "forecast_eom": 69.0,
+    "minutes_used": 70.5,
+    "runs": 232,
+    "pct": 3.5,
+    "remaining": 1929.5,
+    "forecast_eom": 70.0,
     "status": "HEALTHY"
   },
   "split": "bot=Mon/Wed/Fri; sudo=Tue/Thu/Sat after reset; emergency failover active",
   "total_available_minutes": 4000,
-  "total_used": 66.5,
-  "combined_pct": 1.7,
+  "total_used": 70.5,
+  "combined_pct": 1.8,
   "automation_action": "none",
   "automation_details": [],
   "automation_blocked": false
