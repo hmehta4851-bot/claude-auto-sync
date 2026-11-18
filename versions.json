@@ -1,7 +1,7 @@
 {
   "claude_code": "2.1.327",
   "gemini_cli": "0.68.0",
-  "codex_cli": "0.169.1",
-  "updated_at": "2026-11-18T00:23:15Z",
+  "codex_cli": "0.170.0",
+  "updated_at": "2026-11-18T14:57:21Z",
   "note": "Managed by GitHub Actions — do not edit manually"
 }
